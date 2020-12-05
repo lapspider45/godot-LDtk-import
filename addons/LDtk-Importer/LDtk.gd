@@ -15,26 +15,21 @@ func import(source_file:String) -> void:
 	
 	# add levels
 	var levels = map_data.levels
-#	for l in levels:
-#		print(l.keys())
 	
 	for level in levels:
-#		print(level.keys())
 		var new_level := LDtkLevel.new(level)
 		
 		map.add_child(new_level)
 		new_level.set_owner(map)
 		
 		#add layers
-#		var layerInstances = get_level_layerInstances(level)
-#		for layerInstance in layerInstances:
-#			new_level.add_child(layerInstance)
-#			layerInstance.set_owner(map)
-#
-#			for child in layerInstance.get_children():
-#				child.set_owner(map)
-#				for grandchild in child.get_children():
-#					grandchild.set_owner(map)
+		var layers := []
+		
+		for l in new_level.layer_instances:
+			print(l.__type)
+			var instance := LDtkLayerInstance.new(l)
+			new_level.add_child(instance)
+			instance.owner = map # this makes sure that the node is included when packing
 
 #create layers in level
 func get_level_layerInstances(level):

@@ -7,7 +7,7 @@ export var uid : int
 export var world_pos : Vector2
 export var px_size : Vector2
 export var bg_color : Color
-export var layer_instances : Array
+var layer_instances : Array
 export var __neighbours : Array
 
 func _init(d:Dictionary = {}):
@@ -25,9 +25,6 @@ func _init(d:Dictionary = {}):
 	
 	layer_instances = d.layerInstances
 	__neighbours = d.__neighbours
-	
-#	print(layer_instances)
-#	print(typeof(layer_instances) == TYPE_ARRAY)
 	
 	name = identifier
 	position = world_pos

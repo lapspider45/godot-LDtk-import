@@ -14,6 +14,11 @@ _global_script_classes=[ {
 "language": "GDScript",
 "path": "res://addons/LDtk-Importer/LDtk.gd"
 }, {
+"base": "Node",
+"class": "LDtkLayerInstance",
+"language": "GDScript",
+"path": "res://addons/LDtk-Importer/LDtkLayerInstance.gd"
+}, {
 "base": "Node2D",
 "class": "LDtkLevel",
 "language": "GDScript",
@@ -21,6 +26,7 @@ _global_script_classes=[ {
 } ]
 _global_script_class_icons={
 "LDtk": "",
+"LDtkLayerInstance": "",
 "LDtkLevel": ""
 }
 
