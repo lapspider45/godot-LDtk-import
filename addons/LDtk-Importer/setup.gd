@@ -1,7 +1,7 @@
 tool
 extends EditorPlugin
 
-
+var plugin_script = preload("LDtkImporter.gd")
 var import_plugin = null
 
 
@@ -10,10 +10,11 @@ func get_name():
 
 
 func _enter_tree():
-	import_plugin = preload("LDtkImporter.gd").new()
+	import_plugin = plugin_script.new()
 	add_import_plugin(import_plugin)
 
 
 func _exit_tree():
 	remove_import_plugin(import_plugin)
 	import_plugin = null
+
