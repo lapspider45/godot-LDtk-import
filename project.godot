@@ -8,9 +8,20 @@
 
 config_version=4
 
-_global_script_classes=[  ]
+_global_script_classes=[ {
+"base": "Reference",
+"class": "LDtk",
+"language": "GDScript",
+"path": "res://addons/LDtk-Importer/LDtk.gd"
+}, {
+"base": "Node2D",
+"class": "LDtkLevel",
+"language": "GDScript",
+"path": "res://addons/LDtk-Importer/LDtkLevel.gd"
+} ]
 _global_script_class_icons={
-
+"LDtk": "",
+"LDtkLevel": ""
 }
 
 [application]

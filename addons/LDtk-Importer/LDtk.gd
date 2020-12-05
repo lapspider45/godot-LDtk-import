@@ -1,8 +1,60 @@
 tool
 extends Reference
 
+class_name LDtk
 
+var map : Node2D
 var map_data setget _set_map_data
+var source_filepath : String
+
+
+func import(source_file:String) -> void:
+	map = Node2D.new()
+	map_data = load_LDtk_file(source_file)
+	map.name = source_file.get_file().get_basename()
+	
+	# add levels
+	var levels = map_data.levels
+#	for l in levels:
+#		print(l.keys())
+	
+	for level in levels:
+#		print(level.keys())
+		var new_level := LDtkLevel.new(level)
+		
+		map.add_child(new_level)
+		new_level.set_owner(map)
+		
+		#add layers
+#		var layerInstances = get_level_layerInstances(level)
+#		for layerInstance in layerInstances:
+#			new_level.add_child(layerInstance)
+#			layerInstance.set_owner(map)
+#
+#			for child in layerInstance.get_children():
+#				child.set_owner(map)
+#				for grandchild in child.get_children():
+#					grandchild.set_owner(map)
+
+#create layers in level
+func get_level_layerInstances(level):
+	var layers = []
+	for layerInstance in level.layerInstances:
+		match layerInstance.__type:
+			'Entities':
+				var new_node = Node2D.new()
+				new_node.name = layerInstance.__identifier
+				var entities = get_layer_entities(layerInstance)
+				for entity in entities:
+					new_node.add_child(entity)
+
+				layers.append(new_node)
+			'Tiles', 'IntGrid', 'AutoLayer':
+				var new_layer = new_tilemap(layerInstance)
+				if new_layer:
+					layers.append(new_layer)
+
+	return layers
 
 
 #setget mapdata from filepath.
@@ -53,15 +105,15 @@ func new_entity(entity_data):
 						new_entity = StaticBody2D.new()
 	else:
 		return
-
+	
 	match new_entity.get_class():
 		'Area2D', 'KinematicBody2D', 'RigidBody2D', 'StaticBody2D':
 			var col_shape = new_rectangle_collision_shape(get_entity_size(entity_data.__identifier))
 			new_entity.add_child(col_shape)
-
+	
 	new_entity.name = entity_data.__identifier
 	new_entity.position = Vector2(entity_data.px[0], entity_data.px[1])
-
+	
 	return new_entity
 
 
@@ -71,7 +123,7 @@ func new_rectangle_collision_shape(size):
 	col_shape.shape = RectangleShape2D.new()
 	col_shape.shape.extents = size / 2
 	col_shape.position = size / 2
-
+	
 	return col_shape
 
 
@@ -85,7 +137,7 @@ func get_entity_size(entity_identifier):
 func new_tilemap(tilemap_data):
 	if tilemap_data.__type == 'IntGrid' and get_layer_tileset_data(tilemap_data.layerDefUid) == null:
 		return
-
+	
 	var tilemap = TileMap.new()
 	var tileset_data = get_layer_tileset_data(tilemap_data.layerDefUid)
 	tilemap.tile_set = new_tileset(tileset_data)
@@ -93,7 +145,7 @@ func new_tilemap(tilemap_data):
 	tilemap.position = Vector2(tilemap_data.__pxTotalOffsetX, tilemap_data.__pxTotalOffsetY)
 	tilemap.cell_size = Vector2(tilemap_data.__gridSize, tilemap_data.__gridSize)
 	tilemap.modulate = Color(1,1,1, tilemap_data.__opacity)
-
+	
 	match tilemap_data.__type:
 		'Tiles':
 			for tile in tilemap_data.gridTiles:
@@ -110,15 +162,15 @@ func new_tilemap(tilemap_data):
 #create new tileset from tileset_data.
 func new_tileset(tileset_data):
 	var tileset = TileSet.new()
-	var texture_filepath = 'res://' + tileset_data.relPath
+	var texture_filepath = "%s/%s" % [source_filepath, tileset_data.relPath]
 	var texture = load(texture_filepath)
-
+	
 	var texture_image = texture.get_data()
-
+	
 	var gridWidth = (tileset_data.pxWid - tileset_data.padding) / (tileset_data.tileGridSize + tileset_data.spacing)
 	var gridHeight = (tileset_data.pxHei - tileset_data.padding) / (tileset_data.tileGridSize + tileset_data.spacing)
 	var gridSize = gridWidth * gridHeight
-
+	
 	for tileId in range(0, gridSize):
 		var tile_image = texture_image.get_rect(get_tile_region(tileId, tileset_data))
 		if not tile_image.is_invisible():
@@ -126,7 +178,7 @@ func new_tileset(tileset_data):
 			tileset.tile_set_tile_mode(tileId, TileSet.SINGLE_TILE)
 			tileset.tile_set_texture(tileId, texture)
 			tileset.tile_set_region(tileId, get_tile_region(tileId, tileset_data))
-
+	
 	return tileset
 
 
@@ -153,9 +205,9 @@ func get_tile_region(tileId, tileset_data):
 	var atlasGridSize = tileset_data.tileGridSize
 	var atlasGridWidth = tileset_data.pxWid / atlasGridSize
 	var pixelTile = tileId_to_pxCoords(tileId, atlasGridSize, atlasGridWidth, padding, spacing)
-
+	
 	var rect = Rect2(pixelTile, Vector2(atlasGridSize, atlasGridSize))
-
+	
 	return rect
 
 
@@ -163,7 +215,7 @@ func get_tile_region(tileId, tileset_data):
 func coordId_to_gridCoords(coordId, gridWidth):
 	var gridY = floor(coordId / gridWidth)
 	var gridX = coordId - gridY * gridWidth
-
+	
 	return Vector2(gridX, gridY)
 
 
@@ -171,7 +223,7 @@ func coordId_to_gridCoords(coordId, gridWidth):
 func tileId_to_gridCoords(tileId, atlasGridWidth):
 	var gridTileX = tileId - atlasGridWidth * int(tileId / atlasGridWidth)
 	var gridTileY = int(tileId / atlasGridWidth)
-
+	
 	return Vector2(gridTileX, gridTileY)
 
 
@@ -180,6 +232,6 @@ func tileId_to_pxCoords(tileId, atlasGridSize, atlasGridWidth, padding, spacing)
 	var gridCoords = tileId_to_gridCoords(tileId, atlasGridWidth)
 	var pixelTileX = padding + gridCoords.x * (atlasGridSize + spacing)
 	var pixelTileY = padding + gridCoords.y * (atlasGridSize + spacing)
-
+	
 	return Vector2(pixelTileX, pixelTileY)
 
