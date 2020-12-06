@@ -3,11 +3,14 @@ extends Reference
 
 class_name LDtk
 
+const DEBUG = true
+
+
 var map : Node2D
 var map_data setget _set_map_data
 var source_filepath : String
 
-export var tilesets : Dictionary
+export var tilesets := {}
 
 
 func import(source_file:String) -> void:
@@ -15,53 +18,66 @@ func import(source_file:String) -> void:
 	map_data = load_LDtk_file(source_file)
 	map.name = source_file.get_file().get_basename()
 	
-	create_tilesets()
-	print(tilesets)
+	create_tilesets(map_data.defs)
 	
 	# add levels
-	var levels = map_data.levels
-	
-	for level in levels:
-		var new_level := LDtkLevel.new(level)
+	for level in map_data.levels:
+		var new_level = import_level(level)
 		
 		map.add_child(new_level)
 		new_level.set_owner(map)
 		
 		#add layers
-		
 		for l in new_level.layer_instances:
-			var instance = new_tilemap(l)
-##			print(l.__type)
-#			var instance := LDtkLayerInstance.new(l)
-			new_level.add_child(instance)
+			var instance = import_layerInstance(l)
+			if instance:
+				new_level.add_child(instance)
+			else:
+				push_warning("could not import layerInstance %s" % l.__identifier)
 #			instance.owner = map # this makes sure that the node is included when packing
+		
+		# reverse sort layers
+		var layers = new_level.get_children()
+		layers.invert()
+		var pos = 0
+		for layer in layers:
+			new_level.move_child(layer, pos)
+			pos += 1
+			
 	map.propagate_call("set_owner", [map])
 
-func create_tilesets():
-	for d in map_data.defs.tilesets:
-		var tileset = new_tileset(d)
-		tilesets[tileset.uid] = tileset
+
+func import_level(level:Dictionary):
+	print_debug("importing level %s" % level.identifier)
+	var new_level := LDtkLevel.new(level)
+	
+	return new_level
 
 
-#create layers in level
-func get_level_layerInstances(level):
-	var layers = []
-	for layerInstance in level.layerInstances:
-		match layerInstance.__type:
-			'Entities':
-				var new_node = Node2D.new()
-				new_node.name = layerInstance.__identifier
-				var entities = get_layer_entities(layerInstance)
-				for entity in entities:
-					new_node.add_child(entity)
+func import_layerInstance(layerInst:Dictionary):
+	var instance
+	match layerInst.__type:
+		"Entities":
+			instance = Node2D.new()
+			instance.name = layerInst.__identifier
+			var entities = get_layer_entities(layerInst)
+			for entity in entities:
+				instance.add_child(entity)
+		'Tiles', 'AutoLayer':
+			instance = new_tilemap(layerInst)
+		"IntGrid":
+			if layerInst.autoLayerTiles.empty():
+				instance = LDtkIntGrid.new(layerInst)
+			else:
+				# TODO: also generate the int map of collisions
+				instance = new_tilemap(layerInst)
+	return instance
 
-				layers.append(new_node)
-			'Tiles', 'IntGrid', 'AutoLayer':
-				var new_layer = new_tilemap(layerInstance)
-				if new_layer:
-					layers.append(new_layer)
 
-	return layers
+func create_tilesets(defs:Dictionary):
+	for d in defs.tilesets:
+		var tileset := new_tileset(d)
+		tilesets[d.uid] = tileset
 
 
 #setget mapdata from filepath.
@@ -87,8 +103,9 @@ func get_layer_entities(layer):
 
 	var entities = []
 	for entity in layer.entityInstances:
-		var new_entity = new_entity(entity)
-		entities.append(new_entity)
+		pass
+#		var new_entity = new_entity(entity)
+#		entities.append(new_entity)
 
 	return entities
 
@@ -113,10 +130,10 @@ func new_entity(entity_data):
 	else:
 		return
 	
-	match new_entity.get_class():
-		'Area2D', 'KinematicBody2D', 'RigidBody2D', 'StaticBody2D':
-			var col_shape = new_rectangle_collision_shape(get_entity_size(entity_data.__identifier))
-			new_entity.add_child(col_shape)
+#	match new_entity.get_class():
+#		'Area2D', 'KinematicBody2D', 'RigidBody2D', 'StaticBody2D':
+#			var col_shape = new_rectangle_collision_shape(get_entity_size(entity_data.__identifier))
+#			new_entity.add_child(col_shape)
 	
 	new_entity.name = entity_data.__identifier
 	new_entity.position = Vector2(entity_data.px[0], entity_data.px[1])
@@ -142,15 +159,9 @@ func get_entity_size(entity_identifier):
 
 #create new TileMap from tilemap_data.
 func new_tilemap(data) -> TileMap:
-	if data.__type == 'IntGrid' \
-		and get_layer_tileset_data(data.layerDefUid) == null:
-		return null
-	
 	var tilemap := TileMap.new()
 	var tileset_data = get_layer_tileset_data(data.layerDefUid)
-	print(tileset_data)
-	var tileset = tilesets.get(0)
-#	print(tileset, tileset_data.uid)
+	var tileset = tilesets[tileset_data.uid]
 	tilemap.tile_set = tileset
 	tilemap.name = data.__identifier
 	tilemap.position = Vector2(data.__pxTotalOffsetX, data.__pxTotalOffsetY)
@@ -160,22 +171,23 @@ func new_tilemap(data) -> TileMap:
 	match data.__type:
 		'Tiles':
 			for tile in data.gridTiles:
+				var flip_x:bool = int(tile.f) & 1
+				var flip_y:bool = int(tile.f) & 2
 				var grid_coords = coordId_to_gridCoords(tile.d[0], data.__cWid)
-				tilemap.set_cellv(grid_coords, tile.t)
-		'IntGrid', 'AutoLayer':
+				tilemap.set_cellv(grid_coords, tile.t, flip_x, flip_y)
+		'AutoLayer', 'IntGrid':
 			for tile in data.autoLayerTiles:
 				var flip_x:bool = int(tile.f) & 1
 				var flip_y:bool = int(tile.f) & 2
 				var grid_coords = coordId_to_gridCoords(tile.d[1], data.__cWid)
 				tilemap.set_cellv(grid_coords, tile.t, flip_x, flip_y)
-	
 	return tilemap
 
 
 #create new tileset from tileset_data.
-func new_tileset(tileset_data) -> LDtkTileSet:
-	var tileset = LDtkTileSet.new()
-	tileset.uid = tileset_data.uid
+func new_tileset(tileset_data) -> TileSet:
+	var tileset = TileSet.new()
+#	tileset.uid = tileset_data.uid
 	var texture_filepath = "%s/%s" % [source_filepath, tileset_data.relPath]
 	var texture = load(texture_filepath)
 	
@@ -197,20 +209,21 @@ func new_tileset(tileset_data) -> LDtkTileSet:
 
 
 #get layer tileset_data by layerDefUid.
-func get_layer_tileset_data(defUid) -> Dictionary:
-	var tilesetId
+func get_layer_tileset_data(layerDefUid) -> Dictionary:
+	var tilesetId : int
 	for layer in map_data.defs.layers:
-		if layer.uid == defUid:
+		if layer.uid == layerDefUid:
 			match layer.__type:
-				'AutoLayer', 'IntGrid':
+				'AutoLayer', "IntGrid":
 					tilesetId = layer.autoTilesetDefUid
 				'Tiles':
 					tilesetId = layer.tilesetDefUid
-
+	
+	
 	for tileset_data in map_data.defs.tilesets:
-		if tileset_data.uid == defUid:
+		if tileset_data.uid == tilesetId:
 			return tileset_data
-	push_warning("could not find tileset with uid of %s" % defUid)
+	push_warning("could not find tileset with uid of %s" % tilesetId)
 	return {}
 
 

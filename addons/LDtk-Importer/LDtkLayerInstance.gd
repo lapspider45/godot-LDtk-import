@@ -37,18 +37,3 @@ func _init(d:Dictionary = {}):
 			pass
 	
 	name = identifier
-
-
-
-
-class IntGrid:
-	pass
-
-class Entities:
-	pass
-
-class Tiles:
-	pass
-
-class AutoLayer:
-	pass

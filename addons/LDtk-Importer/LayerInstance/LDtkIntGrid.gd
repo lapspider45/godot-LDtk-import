@@ -27,8 +27,16 @@ func _init(d:Dictionary = {}):
 	name = identifier
 	modulate.a = opacity
 	
+	set_int_tiles(d.intGrid)
 	
-	# just checking
-	tile_set = load("res://test/number_tileset_dbg.tres")
+	
+	
+	if LDtk.DEBUG:
+		tile_set = load("res://test/number_tileset_dbg.tres")
 
-
+func set_int_tiles(tiles:Array):
+	var dx : int = _cell_size.x
+	for t in tiles:
+		var i : int = t.coordId
+		var xy = Vector2(i % dx, floor(i/dx))
+		set_cellv(xy, t.v)
