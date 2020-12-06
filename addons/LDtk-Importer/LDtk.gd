@@ -7,11 +7,16 @@ var map : Node2D
 var map_data setget _set_map_data
 var source_filepath : String
 
+export var tilesets : Dictionary
+
 
 func import(source_file:String) -> void:
 	map = Node2D.new()
 	map_data = load_LDtk_file(source_file)
 	map.name = source_file.get_file().get_basename()
+	
+	create_tilesets()
+	print(tilesets)
 	
 	# add levels
 	var levels = map_data.levels
@@ -23,13 +28,20 @@ func import(source_file:String) -> void:
 		new_level.set_owner(map)
 		
 		#add layers
-		var layers := []
 		
 		for l in new_level.layer_instances:
-			print(l.__type)
-			var instance := LDtkLayerInstance.new(l)
+			var instance = new_tilemap(l)
+##			print(l.__type)
+#			var instance := LDtkLayerInstance.new(l)
 			new_level.add_child(instance)
-			instance.owner = map # this makes sure that the node is included when packing
+#			instance.owner = map # this makes sure that the node is included when packing
+	map.propagate_call("set_owner", [map])
+
+func create_tilesets():
+	for d in map_data.defs.tilesets:
+		var tileset = new_tileset(d)
+		tilesets[tileset.uid] = tileset
+
 
 #create layers in level
 func get_level_layerInstances(level):
@@ -129,34 +141,41 @@ func get_entity_size(entity_identifier):
 
 
 #create new TileMap from tilemap_data.
-func new_tilemap(tilemap_data):
-	if tilemap_data.__type == 'IntGrid' and get_layer_tileset_data(tilemap_data.layerDefUid) == null:
-		return
+func new_tilemap(data) -> TileMap:
+	if data.__type == 'IntGrid' \
+		and get_layer_tileset_data(data.layerDefUid) == null:
+		return null
 	
-	var tilemap = TileMap.new()
-	var tileset_data = get_layer_tileset_data(tilemap_data.layerDefUid)
-	tilemap.tile_set = new_tileset(tileset_data)
-	tilemap.name = tilemap_data.__identifier
-	tilemap.position = Vector2(tilemap_data.__pxTotalOffsetX, tilemap_data.__pxTotalOffsetY)
-	tilemap.cell_size = Vector2(tilemap_data.__gridSize, tilemap_data.__gridSize)
-	tilemap.modulate = Color(1,1,1, tilemap_data.__opacity)
+	var tilemap := TileMap.new()
+	var tileset_data = get_layer_tileset_data(data.layerDefUid)
+	print(tileset_data)
+	var tileset = tilesets.get(0)
+#	print(tileset, tileset_data.uid)
+	tilemap.tile_set = tileset
+	tilemap.name = data.__identifier
+	tilemap.position = Vector2(data.__pxTotalOffsetX, data.__pxTotalOffsetY)
+	tilemap.cell_size = Vector2(data.__gridSize, data.__gridSize)
+	tilemap.modulate = Color(1,1,1, data.__opacity)
 	
-	match tilemap_data.__type:
+	match data.__type:
 		'Tiles':
-			for tile in tilemap_data.gridTiles:
-				var grid_coords = coordId_to_gridCoords(tile.d[0], tilemap_data.__cWid)
-				tilemap.set_cellv(grid_coords, tile.d[1])
+			for tile in data.gridTiles:
+				var grid_coords = coordId_to_gridCoords(tile.d[0], data.__cWid)
+				tilemap.set_cellv(grid_coords, tile.t)
 		'IntGrid', 'AutoLayer':
-			for tile in tilemap_data.autoLayerTiles:
-				var grid_coords = coordId_to_gridCoords(tile.d[1], tilemap_data.__cWid)
-				tilemap.set_cellv(grid_coords, tile.d[2])
-
+			for tile in data.autoLayerTiles:
+				var flip_x:bool = int(tile.f) & 1
+				var flip_y:bool = int(tile.f) & 2
+				var grid_coords = coordId_to_gridCoords(tile.d[1], data.__cWid)
+				tilemap.set_cellv(grid_coords, tile.t, flip_x, flip_y)
+	
 	return tilemap
 
 
 #create new tileset from tileset_data.
-func new_tileset(tileset_data):
-	var tileset = TileSet.new()
+func new_tileset(tileset_data) -> LDtkTileSet:
+	var tileset = LDtkTileSet.new()
+	tileset.uid = tileset_data.uid
 	var texture_filepath = "%s/%s" % [source_filepath, tileset_data.relPath]
 	var texture = load(texture_filepath)
 	
@@ -178,10 +197,10 @@ func new_tileset(tileset_data):
 
 
 #get layer tileset_data by layerDefUid.
-func get_layer_tileset_data(layerDefUid):
+func get_layer_tileset_data(defUid) -> Dictionary:
 	var tilesetId
 	for layer in map_data.defs.layers:
-		if layer.uid == layerDefUid:
+		if layer.uid == defUid:
 			match layer.__type:
 				'AutoLayer', 'IntGrid':
 					tilesetId = layer.autoTilesetDefUid
@@ -189,8 +208,10 @@ func get_layer_tileset_data(layerDefUid):
 					tilesetId = layer.tilesetDefUid
 
 	for tileset_data in map_data.defs.tilesets:
-		if tileset_data.uid == tilesetId:
+		if tileset_data.uid == defUid:
 			return tileset_data
+	push_warning("could not find tileset with uid of %s" % defUid)
+	return {}
 
 
 #get tile region(Rect2) by tileId.
